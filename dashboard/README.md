@@ -125,6 +125,30 @@ listen 9090;
 sudo systemctl restart nginx
 ```
 
+**端口冲突解决**:
+
+如果安装时遇到8080端口被占用的情况：
+
+1. **使用自动化脚本**（推荐）:
+   ```bash
+   sudo ./setup-dashboard.sh
+   ```
+   脚本会自动检测端口冲突并提供解决方案
+
+2. **手动检查端口占用**:
+   ```bash
+   sudo netstat -tulnp | grep :8080
+   sudo ss -tulnp | grep :8080
+   ```
+
+3. **查找nginx中的端口冲突**:
+   ```bash
+   sudo grep -r "listen.*8080" /etc/nginx/
+   ```
+
+4. **选择其他端口**:
+   常用的备选端口：9080, 9090, 8088, 8888
+
 ### 访问控制
 
 为了安全，强烈建议启用IP访问控制：
