@@ -58,6 +58,53 @@ detect_os() {
     print_status "Detected OS: $OS"
 }
 
+# Detect existing nginx installation and set paths accordingly
+detect_nginx_installation() {
+    print_status "Detecting existing Nginx installation..."
+    
+    # Check if nginx is already installed
+    if command -v nginx >/dev/null 2>&1; then
+        print_status "Found existing Nginx installation"
+        
+        # Detect nginx configuration directory
+        if [ -f /usr/local/openresty/nginx/conf/nginx.conf ]; then
+            NGINX_CONF_DIR="/usr/local/openresty/nginx/conf"
+            WEB_USER="nobody"
+            WEB_GROUP="nobody"
+            print_status "Detected OpenResty installation"
+            return 0
+        elif [ -f /etc/nginx/nginx.conf ]; then
+            NGINX_CONF_DIR="/etc/nginx"
+            WEB_USER="www-data"
+            WEB_GROUP="www-data"
+            print_status "Detected standard Nginx installation"
+            return 0
+        elif [ -f /usr/local/nginx/conf/nginx.conf ]; then
+            NGINX_CONF_DIR="/usr/local/nginx/conf"
+            WEB_USER="nginx"
+            WEB_GROUP="nginx"
+            print_status "Detected custom Nginx installation"
+            return 0
+        else
+            print_warning "Nginx is installed but configuration directory not found"
+            print_status "Will proceed with installation and use default paths"
+        fi
+    else
+        print_status "Nginx not detected, will install Nginx"
+    fi
+    
+    # Set default paths for new installation
+    if [ "$OS" = "debian" ]; then
+        NGINX_CONF_DIR="/etc/nginx"
+        WEB_USER="www-data"
+        WEB_GROUP="www-data"
+    else
+        NGINX_CONF_DIR="/etc/nginx"
+        WEB_USER="nginx"
+        WEB_GROUP="nginx"
+    fi
+}
+
 # Install required packages
 install_packages() {
     print_status "Installing required packages..."
@@ -291,7 +338,9 @@ show_completion() {
     echo -e "${GREEN}=== Installation Summary ===${NC}"
     echo -e "Installation directory: ${YELLOW}$IWAF_DIR${NC}"
     echo -e "Configuration file: ${YELLOW}$IWAF_DIR/config.json${NC}"
-    echo -e "Nginx config: ${YELLOW}$NGINX_CONF_DIR/conf.d/iwaf.conf${NC}"
+    echo -e "Nginx config directory: ${YELLOW}$NGINX_CONF_DIR${NC}"
+    echo -e "Nginx config file: ${YELLOW}$NGINX_CONF_DIR/conf.d/iwaf.conf${NC}"
+    echo -e "Web user: ${YELLOW}$WEB_USER${NC}"
     echo
     echo -e "${BLUE}=== Dashboard Installation ===${NC}"
     echo -e "Dashboard is NOT installed by default."
@@ -314,6 +363,7 @@ main() {
     
     check_root
     detect_os
+    detect_nginx_installation
     install_packages
     check_nginx_lua
     create_directories

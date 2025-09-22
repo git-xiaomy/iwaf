@@ -150,6 +150,140 @@ tail -f /var/log/nginx/iwaf_dashboard_access.log
 tail -f /var/log/nginx/iwaf_dashboard_error.log
 ```
 
+**端口冲突解决方案**:
+如果8080端口被其他服务占用，有以下几种解决方案：
+
+1. **查看端口占用情况**:
+   ```bash
+   # 查看哪个进程在使用8080端口
+   sudo netstat -tulnp | grep :8080
+   sudo ss -tulnp | grep :8080
+   
+   # 查看nginx配置中使用8080端口的站点
+   sudo grep -r "listen.*8080" /etc/nginx/
+   ```
+
+2. **修改dashboard端口**:
+   ```bash
+   # 编辑dashboard配置文件
+   sudo nano /etc/nginx/sites-available/iwaf-dashboard
+   # 或
+   sudo nano /etc/nginx/conf.d/iwaf-dashboard.conf
+   
+   # 将端口改为其他可用端口
+   listen 9080;
+   listen [::]:9080;
+   
+   # 重启nginx
+   sudo systemctl restart nginx
+   
+   # 更新防火墙规则
+   sudo ufw allow 9080/tcp
+   ```
+
+3. **使用setup脚本的自动检测功能**:
+   - 重新运行 `dashboard/setup-dashboard.sh` 脚本
+   - 脚本会自动检测端口冲突并提供解决方案选项
+
+---
+
+### 3. 安装脚本是自动检测nginx位置的吗？
+
+**回答**: 是的，iWAF的安装脚本具有**自动nginx位置检测功能**，支持多种nginx安装方式：
+
+#### 🔧 自动检测机制
+
+**主安装脚本** (`setup.sh`) 和 **dashboard安装脚本** (`dashboard/setup-dashboard.sh`) 都包含nginx自动检测功能：
+
+**检测优先级顺序**:
+1. **OpenResty**: `/usr/local/openresty/nginx/conf/`
+2. **标准Nginx**: `/etc/nginx/`  
+3. **自定义安装**: `/usr/local/nginx/conf/`
+
+**检测代码示例**:
+```bash
+# 自动检测nginx配置目录
+if [ -f /usr/local/openresty/nginx/conf/nginx.conf ]; then
+    NGINX_CONF_DIR="/usr/local/openresty/nginx/conf"
+    WEB_USER="nobody"
+elif [ -f /etc/nginx/nginx.conf ]; then
+    NGINX_CONF_DIR="/etc/nginx"
+    WEB_USER="www-data"
+elif [ -f /usr/local/nginx/conf/nginx.conf ]; then
+    NGINX_CONF_DIR="/usr/local/nginx/conf"
+    WEB_USER="nginx"
+fi
+```
+
+#### 📁 支持的nginx配置结构
+
+**1. Ubuntu/Debian标准结构**:
+```
+/etc/nginx/
+├── nginx.conf
+├── sites-available/
+├── sites-enabled/
+└── conf.d/
+```
+
+**2. CentOS/RHEL结构**:
+```
+/etc/nginx/
+├── nginx.conf
+└── conf.d/
+```
+
+**3. OpenResty结构**:
+```
+/usr/local/openresty/nginx/conf/
+├── nginx.conf
+└── conf.d/
+```
+
+#### 🎯 自动配置功能
+
+**用户和权限自动设置**:
+- **Ubuntu/Debian**: `www-data:www-data`
+- **CentOS/RHEL**: `nginx:nginx`  
+- **OpenResty**: `nobody:nobody`
+
+**配置文件自动放置**:
+- 支持 `sites-available/sites-enabled` 结构（Ubuntu/Debian）
+- 支持 `conf.d/` 结构（CentOS/RHEL）
+- 自动创建软链接启用站点
+
+#### 🛠️ 手动指定nginx路径
+
+如果自动检测失败，可以手动修改配置变量：
+
+```bash
+# 编辑安装脚本
+nano setup.sh
+
+# 修改nginx配置目录
+NGINX_CONF_DIR="/your/custom/nginx/path"
+WEB_USER="your_web_user"
+WEB_GROUP="your_web_group"
+```
+
+#### 🔍 检测验证命令
+
+安装前可以使用以下命令验证nginx安装：
+
+```bash
+# 检查nginx是否已安装
+command -v nginx
+
+# 查看nginx版本和编译选项
+nginx -V
+
+# 查看nginx配置文件位置
+nginx -t
+
+# 查看nginx进程用户
+ps aux | grep nginx
+```
+
 ---
 
 ## 📝 总结
