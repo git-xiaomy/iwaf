@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iWAF - 智能Web应用防火墙管理面板</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <h1>iWAF</h1>
+                <span class="version">v1.0.0</span>
+            </div>
+            <div class="status-indicator">
+                <span id="waf-status" class="status-enabled">
+                    <i class="fas fa-check-circle"></i>
+                    WAF 已启用
+                </span>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="sidebar">
+            <ul class="nav-menu">
+                <li class="nav-item active" data-tab="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>仪表盘</span>
+                </li>
+                <li class="nav-item" data-tab="security">
+                    <i class="fas fa-lock"></i>
+                    <span>安全配置</span>
+                </li>
+                <li class="nav-item" data-tab="ip-filter">
+                    <i class="fas fa-filter"></i>
+                    <span>IP过滤</span>
+                </li>
+                <li class="nav-item" data-tab="rate-limit">
+                    <i class="fas fa-clock"></i>
+                    <span>速率限制</span>
+                </li>
+                <li class="nav-item" data-tab="logs">
+                    <i class="fas fa-file-alt"></i>
+                    <span>日志查看</span>
+                </li>
+                <li class="nav-item" data-tab="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>系统设置</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-content active">
+                <h2><i class="fas fa-tachometer-alt"></i> 仪表盘</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-requests">0</h3>
+                            <p>总请求数</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon blocked">
+                            <i class="fas fa-ban"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="blocked-requests">0</h3>
+                            <p>拦截请求</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon safe">
+                            <i class="fas fa-check-shield"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="safe-requests">0</h3>
+                            <p>安全请求</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="threat-level">低</h3>
+                            <p>威胁等级</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <h3><i class="fas fa-chart-line"></i> 请求趋势</h3>
+                        <div class="chart-placeholder">
+                            <canvas id="requestChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <h3><i class="fas fa-chart-pie"></i> 威胁类型分布</h3>
+                        <div class="threat-list">
+                            <div class="threat-item">
+                                <span class="threat-type">SQL注入</span>
+                                <span class="threat-count">45</span>
+                                <div class="progress-bar">
+                                    <div class="progress" style="width: 60%"></div>
+                                </div>
+                            </div>
+                            <div class="threat-item">
+                                <span class="threat-type">XSS攻击</span>
+                                <span class="threat-count">32</span>
+                                <div class="progress-bar">
+                                    <div class="progress" style="width: 40%"></div>
+                                </div>
+                            </div>
+                            <div class="threat-item">
+                                <span class="threat-type">路径遍历</span>
+                                <span class="threat-count">18</span>
+                                <div class="progress-bar">
+                                    <div class="progress" style="width: 25%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Configuration Tab -->
+            <div id="security" class="tab-content">
+                <h2><i class="fas fa-lock"></i> 安全配置</h2>
+                
+                <div class="config-section">
+                    <h3>核心防护功能</h3>
+                    
+                    <div class="config-group">
+                        <div class="toggle-item">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="sql-protection" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-info">
+                                <h4><i class="fas fa-database"></i> SQL注入防护</h4>
+                                <p>检测和阻止SQL注入攻击尝试</p>
+                            </div>
+                        </div>
+                        
+                        <div class="toggle-item">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="xss-protection" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-info">
+                                <h4><i class="fas fa-code"></i> XSS防护</h4>
+                                <p>防止跨站脚本攻击</p>
+                            </div>
+                        </div>
+                        
+                        <div class="toggle-item">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="path-traversal" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-info">
+                                <h4><i class="fas fa-folder"></i> 路径遍历防护</h4>
+                                <p>阻止目录遍历攻击</p>
+                            </div>
+                        </div>
+                        
+                        <div class="toggle-item">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="user-agent-filter" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="toggle-info">
+                                <h4><i class="fas fa-user-secret"></i> User-Agent过滤</h4>
+                                <p>检测恶意爬虫和扫描工具</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="config-section">
+                    <h3>请求限制</h3>
+                    
+                    <div class="input-group">
+                        <label for="max-body-size">
+                            <i class="fas fa-weight-hanging"></i>
+                            最大请求体大小 (MB)
+                        </label>
+                        <input type="number" id="max-body-size" value="10" min="1" max="100">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="max-uri-length">
+                            <i class="fas fa-link"></i>
+                            最大URI长度
+                        </label>
+                        <input type="number" id="max-uri-length" value="2048" min="256" max="8192">
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="saveSecurityConfig()">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetSecurityConfig()">
+                        <i class="fas fa-undo"></i> 重置默认
+                    </button>
+                </div>
+            </div>
+
+            <!-- IP Filter Tab -->
+            <div id="ip-filter" class="tab-content">
+                <h2><i class="fas fa-filter"></i> IP过滤</h2>
+                
+                <div class="filter-section">
+                    <h3><i class="fas fa-check-circle"></i> 白名单</h3>
+                    <div class="ip-input-group">
+                        <input type="text" id="whitelist-ip" placeholder="输入IP地址，例如：192.168.1.100">
+                        <button class="btn btn-success" onclick="addWhitelistIP()">
+                            <i class="fas fa-plus"></i> 添加
+                        </button>
+                    </div>
+                    <div class="ip-list" id="whitelist-container">
+                        <!-- 动态生成白名单IP -->
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <h3><i class="fas fa-ban"></i> 黑名单</h3>
+                    <div class="ip-input-group">
+                        <input type="text" id="blacklist-ip" placeholder="输入IP地址，例如：192.168.1.100">
+                        <button class="btn btn-danger" onclick="addBlacklistIP()">
+                            <i class="fas fa-plus"></i> 添加
+                        </button>
+                    </div>
+                    <div class="ip-list" id="blacklist-container">
+                        <!-- 动态生成黑名单IP -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rate Limit Tab -->
+            <div id="rate-limit" class="tab-content">
+                <h2><i class="fas fa-clock"></i> 速率限制</h2>
+                
+                <div class="config-section">
+                    <div class="toggle-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="rate-limit-enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <div class="toggle-info">
+                            <h4>启用速率限制</h4>
+                            <p>限制单个IP的请求频率</p>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="requests-per-minute">
+                            <i class="fas fa-tachometer-alt"></i>
+                            每分钟最大请求数
+                        </label>
+                        <input type="number" id="requests-per-minute" value="120" min="1" max="1000">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="burst-size">
+                            <i class="fas fa-fire"></i>
+                            突发请求数
+                        </label>
+                        <input type="number" id="burst-size" value="20" min="1" max="100">
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="saveRateLimitConfig()">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="logs" class="tab-content">
+                <h2><i class="fas fa-file-alt"></i> 实时日志</h2>
+                
+                <div class="log-controls">
+                    <button class="btn btn-info" onclick="refreshLogs()">
+                        <i class="fas fa-sync"></i> 刷新
+                    </button>
+                    <button class="btn btn-warning" onclick="clearLogs()">
+                        <i class="fas fa-trash"></i> 清空
+                    </button>
+                    <select id="log-level-filter">
+                        <option value="all">所有级别</option>
+                        <option value="error">错误</option>
+                        <option value="warn">警告</option>
+                        <option value="info">信息</option>
+                        <option value="debug">调试</option>
+                    </select>
+                </div>
+                
+                <div class="log-container" id="log-container">
+                    <!-- 动态生成日志条目 -->
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings" class="tab-content">
+                <h2><i class="fas fa-cog"></i> 系统设置</h2>
+                
+                <div class="config-section">
+                    <h3>基本设置</h3>
+                    
+                    <div class="input-group">
+                        <label for="log-level">
+                            <i class="fas fa-list"></i>
+                            日志级别
+                        </label>
+                        <select id="log-level">
+                            <option value="debug">调试</option>
+                            <option value="info" selected>信息</option>
+                            <option value="warn">警告</option>
+                            <option value="error">错误</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="action-mode">
+                            <i class="fas fa-shield-alt"></i>
+                            防护动作
+                        </label>
+                        <select id="action-mode">
+                            <option value="block" selected>阻止</option>
+                            <option value="log">仅记录</option>
+                            <option value="redirect">重定向</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="config-section">
+                    <h3>系统信息</h3>
+                    <div class="system-info">
+                        <div class="info-item">
+                            <span class="info-label">版本:</span>
+                            <span class="info-value">iWAF v1.0.0</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">运行时间:</span>
+                            <span class="info-value" id="uptime">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">配置文件:</span>
+                            <span class="info-value">/etc/nginx/iwaf/config.json</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="saveSystemConfig()">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                    <button class="btn btn-danger" onclick="restartWAF()">
+                        <i class="fas fa-power-off"></i> 重启WAF
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
