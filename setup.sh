@@ -67,7 +67,14 @@ detect_nginx_installation() {
         print_status "Found existing Nginx installation"
         
         # Detect nginx configuration directory
-        if [ -f /usr/local/openresty/nginx/conf/nginx.conf ]; then
+        if [ -f /www/server/nginx/conf/nginx.conf ]; then
+            NGINX_CONF_DIR="/www/server/nginx/conf"
+            IWAF_DIR="/www/server/nginx/iwaf"
+            WEB_USER="www"
+            WEB_GROUP="www"
+            print_status "Detected Baota Panel Nginx installation"
+            return 0
+        elif [ -f /usr/local/openresty/nginx/conf/nginx.conf ]; then
             NGINX_CONF_DIR="/usr/local/openresty/nginx/conf"
             WEB_USER="nobody"
             WEB_GROUP="nobody"
