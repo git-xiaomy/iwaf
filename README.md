@@ -262,6 +262,13 @@ curl -X POST -H "Content-Type: application/json" \
      http://your-server/iwaf/api/config
 ```
 
+## ❓ 常见问题
+
+查看 [FAQ 文档](docs/FAQ.md) 了解：
+- 为什么需要安装 lua-redis 和 mysql 依赖？
+- 默认仪表盘的8080端口是如何创建的？
+- 其他安装和配置相关问题
+
 ## 📁 目录结构
 
 ```

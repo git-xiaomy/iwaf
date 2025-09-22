@@ -52,11 +52,17 @@ sudo apt-get update
 sudo apt-get install -y nginx nginx-module-lua lua-cjson git
 ```
 
-#### 2. 安装可选的 Lua 库
+#### 2. 安装可选的 Lua 库 (可选)
 
 ```bash
+# 注意: 这些库在当前版本中未被使用，可以跳过安装
+# 它们是为未来功能扩展预留的 (分布式缓存和数据库支持)
 sudo apt-get install -y lua-resty-redis lua-resty-mysql
 ```
+
+> **说明**: `lua-resty-redis` 和 `lua-resty-mysql` 在当前版本 (v1.0.0) 中是可选依赖。
+> WAF 核心功能使用 Nginx 共享内存和本地文件存储，不依赖这些外部服务。
+> 如果安装失败，不会影响 WAF 的正常运行。详见 [FAQ](FAQ.md)。
 
 #### 3. 启用 Lua 模块
 
