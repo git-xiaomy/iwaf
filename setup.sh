@@ -145,14 +145,16 @@ copy_files() {
     # Copy Lua files
     cp -r "$PROJECT_DIR/lua/"* "$IWAF_DIR/lua/"
     
-    # Copy web interface
-    cp -r "$PROJECT_DIR/web/"* "$IWAF_DIR/web/"
+    # Copy blocked page to dashboard web directory (for error pages)
+    mkdir -p "$IWAF_DIR/dashboard/web"
+    cp "$PROJECT_DIR/web/blocked.html" "$IWAF_DIR/dashboard/web/"
     
     # Copy configuration
     cp "$PROJECT_DIR/conf/config.json" "$IWAF_DIR/"
     cp "$PROJECT_DIR/conf/iwaf.conf" "$NGINX_CONF_DIR/conf.d/"
     
     print_success "Files copied successfully"
+    print_warning "Dashboard not installed. Use 'dashboard/setup-dashboard.sh' to install separately."
 }
 
 # Set permissions
@@ -285,11 +287,15 @@ show_completion() {
     echo -e "${GREEN}=== Installation Summary ===${NC}"
     echo -e "Installation directory: ${YELLOW}$IWAF_DIR${NC}"
     echo -e "Configuration file: ${YELLOW}$IWAF_DIR/config.json${NC}"
-    echo -e "Web interface: ${YELLOW}http://$(hostname -I | awk '{print $1}')/iwaf/${NC}"
     echo -e "Nginx config: ${YELLOW}$NGINX_CONF_DIR/conf.d/iwaf.conf${NC}"
     echo
+    echo -e "${BLUE}=== Dashboard Installation ===${NC}"
+    echo -e "Dashboard is NOT installed by default."
+    echo -e "To install the dashboard on port 8080, run:"
+    echo -e "${YELLOW}cd dashboard && sudo ./setup-dashboard.sh${NC}"
+    echo
     echo -e "${BLUE}=== Next Steps ===${NC}"
-    echo "1. Access the web interface to configure your WAF settings"
+    echo "1. Install dashboard separately if needed"
     echo "2. Review and customize the configuration file"
     echo "3. Monitor the logs: /var/log/nginx/iwaf_*.log"
     echo "4. Test the WAF functionality"

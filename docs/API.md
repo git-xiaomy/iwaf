@@ -4,9 +4,18 @@ iWAF 提供 RESTful API 接口用于程序化管理和监控。
 
 ## 基础信息
 
-- **Base URL**: `http://your-server/iwaf/api/`
+- **Base URL**: `http://your-server:8080/api/` (Dashboard API)
 - **Content-Type**: `application/json`
 - **响应格式**: JSON
+
+## 访问说明
+
+API现在运行在独立的Dashboard端口(8080)上，需要先安装Dashboard：
+
+```bash
+cd dashboard
+sudo ./setup-dashboard.sh
+```
 
 ## 认证
 
@@ -17,7 +26,7 @@ iWAF 提供 RESTful API 接口用于程序化管理和监控。
 ### 1. 获取统计信息
 
 ```http
-GET /iwaf/api/stats
+GET /api/stats
 ```
 
 **响应示例：**
@@ -34,7 +43,7 @@ GET /iwaf/api/stats
 ### 2. 获取配置
 
 ```http
-GET /iwaf/api/config
+GET /api/config
 ```
 
 **响应示例：**
@@ -84,7 +93,7 @@ Content-Type: application/json
 ### 4. 获取日志
 
 ```http
-GET /iwaf/api/logs?level=warn&limit=100
+GET /api/logs?level=warn&limit=100
 ```
 
 **参数：**
@@ -112,7 +121,7 @@ GET /iwaf/api/logs?level=warn&limit=100
 ### 5. 重启WAF
 
 ```http
-POST /iwaf/api/restart
+POST /api/restart
 ```
 
 **响应示例：**
@@ -147,16 +156,16 @@ POST /iwaf/api/restart
 
 ```bash
 # 获取统计信息
-curl -X GET http://your-server/iwaf/api/stats
+curl -X GET http://your-server:8080/api/stats
 
 # 更新配置
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"enabled": true, "log_level": "debug"}' \
-  http://your-server/iwaf/api/config
+  http://your-server:8080/api/config
 
 # 获取警告级别日志
-curl -X GET "http://your-server/iwaf/api/logs?level=warn&limit=50"
+curl -X GET "http://your-server:8080/api/logs?level=warn&limit=50"
 ```
 
 ### Python 示例
@@ -165,8 +174,8 @@ curl -X GET "http://your-server/iwaf/api/logs?level=warn&limit=50"
 import requests
 import json
 
-# 基础URL
-base_url = "http://your-server/iwaf/api"
+# API configuration for separate dashboard
+base_url = "http://your-server:8080/api"
 
 # 获取统计信息
 response = requests.get(f"{base_url}/stats")
@@ -198,7 +207,7 @@ if response.json()["status"] == "success":
 // 获取统计信息
 async function getStats() {
     try {
-        const response = await fetch('/iwaf/api/stats');
+        const response = await fetch('/api/stats');
         const stats = await response.json();
         console.log('WAF Stats:', stats);
     } catch (error) {
@@ -209,7 +218,7 @@ async function getStats() {
 // 更新配置
 async function updateConfig(config) {
     try {
-        const response = await fetch('/iwaf/api/config', {
+        const response = await fetch('/api/config', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

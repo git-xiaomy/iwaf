@@ -1,7 +1,5 @@
-/**
- * iWAF Web Interface JavaScript
- * Handles all frontend interactions and API communications
- */
+// API configuration
+const API_BASE_URL = '/api';  // Since dashboard runs on separate port, API is relative
 
 // Global variables
 let wafConfig = {
