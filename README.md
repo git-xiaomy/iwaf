@@ -36,69 +36,73 @@ iWAF 是一个基于 Nginx + Lua 开发的高性能Web应用防火墙，提供�
 
 ### 环境要求
 
-- **Nginx** 1.16+ (需要Lua模块支持)
-- **OpenResty** 或者 **Nginx + nginx-module-lua**
+- **操作系统**: Ubuntu 18.04+, Debian 9+, CentOS 7+, RHEL 7+
+- **内存**: 最低 512MB RAM，推荐 2GB+
+- **存储**: 至少 100MB 可用空间
+- **网络**: HTTP/HTTPS 端口访问权限
+
+### 依赖要求
+
+- **Nginx** 1.16+ (需要Lua模块支持) **或** **OpenResty**
 - **Lua** 5.1/5.2/5.3/LuaJIT
 - **lua-cjson** (JSON解析库)
 
-### 一键安装
+## 📦 安装部署
+
+根据您的系统环境，选择对应的安装方式：
+
+### 🔧 方案一：纯净系统安装（未安装Nginx）
+
+适用于全新的服务器环境，将自动安装所需的所有依赖。
+
+#### Ubuntu/Debian 系统
 
 ```bash
-# 克隆项目
+# 1. 更新系统包
+sudo apt-get update
+
+# 2. 克隆iWAF项目
 git clone https://github.com/git-xiaomy/iwaf.git
 cd iwaf
 
-# 安装WAF核心功能
+# 3. 一键安装（推荐）
 sudo ./setup.sh
-
-# 可选：安装独立Dashboard (运行在端口8080)
-cd dashboard
-sudo ./setup-dashboard.sh
 ```
 
-### 手动安装
-
-#### 1. 安装依赖包
-
-**Ubuntu/Debian:**
-```bash
-apt-get update
-apt-get install -y nginx nginx-module-lua lua-cjson lua-resty-redis lua-resty-mysql
-```
-
-**CentOS/RHEL:**
-```bash
-yum install -y nginx nginx-module-lua lua-cjson
-# 或使用 OpenResty
-yum install -y openresty
-```
-
-#### 2. 创建目录和复制文件
+**手动安装步骤：**
 
 ```bash
-# 创建iWAF目录
-sudo mkdir -p /etc/nginx/iwaf/{lua/iwaf,web,logs}
+# 1. 安装Nginx和Lua模块
+sudo apt-get update
+sudo apt-get install -y nginx nginx-module-lua lua-cjson git
 
-# 复制文件
-sudo cp -r lua/ /etc/nginx/iwaf/
-sudo cp -r web/ /etc/nginx/iwaf/
+# 2. 启用Lua模块
+echo 'load_module modules/ngx_http_lua_module.so;' | sudo tee -a /etc/nginx/modules-enabled/50-mod-http-lua.conf
+
+# 3. 克隆项目并安装
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+
+# 4. 创建目录结构
+sudo mkdir -p /etc/nginx/iwaf/{lua/iwaf,web/{css,js,images},logs}
+
+# 5. 复制文件
+sudo cp -r lua/* /etc/nginx/iwaf/lua/
+sudo cp -r web/* /etc/nginx/iwaf/web/ 2>/dev/null || echo "Web files not found, will create basic structure"
 sudo cp conf/config.json /etc/nginx/iwaf/
 sudo cp conf/iwaf.conf /etc/nginx/conf.d/
 
-# 设置权限
+# 6. 设置权限
 sudo chown -R www-data:www-data /etc/nginx/iwaf/
 sudo chmod -R 755 /etc/nginx/iwaf/
 sudo chmod 644 /etc/nginx/iwaf/config.json
-```
+sudo chmod 644 /etc/nginx/conf.d/iwaf.conf
 
-#### 3. 配置Nginx
+# 7. 配置Nginx主配置文件
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+sudo tee -a /etc/nginx/nginx.conf > /dev/null << 'EOF'
 
-在 `/etc/nginx/nginx.conf` 的 `http` 块中添加：
-
-```nginx
-# 加载Lua模块
-load_module modules/ngx_http_lua_module.so;
-
+# iWAF Configuration
 http {
     # 定义共享内存用于WAF缓存
     lua_shared_dict iwaf_cache 10m;
@@ -111,20 +115,481 @@ http {
         local iwaf = require "waf"
         iwaf.init()
     }
-    
-    # 引入iWAF配置
-    include /etc/nginx/conf.d/iwaf.conf;
 }
+EOF
+
+# 8. 测试配置并重启
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl restart nginx
+
+# 9. 验证安装
+curl -I http://localhost
 ```
 
-#### 4. 测试和重启
+#### CentOS/RHEL 系统
 
 ```bash
-# 测试配置
+# 1. 安装EPEL源
+sudo yum install -y epel-release
+
+# 2. 克隆iWAF项目  
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+
+# 3. 一键安装（推荐）
+sudo ./setup.sh
+```
+
+**手动安装步骤：**
+
+```bash
+# 1. 安装Nginx和依赖
+sudo yum install -y epel-release
+sudo yum install -y nginx nginx-module-lua lua-cjson git
+
+# 2. 启用Lua模块
+echo 'load_module modules/ngx_http_lua_module.so;' | sudo tee /etc/nginx/modules/iwaf-lua.conf
+
+# 3. 其余步骤与Ubuntu类似，但用户组为nginx
+sudo chown -R nginx:nginx /etc/nginx/iwaf/
+```
+
+### 🔄 方案二：已安装Nginx系统
+
+适用于已经运行Nginx但未安装Lua模块的环境。
+
+#### 检测当前Nginx是否支持Lua
+
+```bash
+# 检测Lua模块支持
+nginx -V 2>&1 | grep -o with-http_lua_module
+```
+
+如果没有输出，需要安装Lua模块：
+
+**Ubuntu/Debian:**
+```bash
+# 1. 安装Lua模块
+sudo apt-get install -y nginx-module-lua lua-cjson
+
+# 2. 启用模块
+echo 'load_module modules/ngx_http_lua_module.so;' | sudo tee /etc/nginx/modules-enabled/50-mod-http-lua.conf
+
+# 3. 克隆并安装iWAF
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+sudo ./setup.sh
+
+# 4. 或手动配置（跳过Nginx安装步骤）
+sudo mkdir -p /etc/nginx/iwaf/{lua/iwaf,web/{css,js,images},logs}
+sudo cp -r lua/* /etc/nginx/iwaf/lua/
+sudo cp conf/config.json /etc/nginx/iwaf/
+sudo cp conf/iwaf.conf /etc/nginx/conf.d/
+
+# 5. 在现有nginx.conf的http块中添加iWAF配置
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+
+# 在http块中添加以下配置（手动编辑或脚本添加）
+sudo tee -a /tmp/iwaf-http.conf > /dev/null << 'EOF'
+    # iWAF Configuration
+    lua_shared_dict iwaf_cache 10m;
+    lua_package_path "/etc/nginx/iwaf/lua/?.lua;/etc/nginx/iwaf/lua/iwaf/?.lua;;";
+    
+    init_by_lua_block {
+        local iwaf = require "waf"
+        iwaf.init()
+    }
+EOF
+
+# 6. 设置权限和测试
+sudo chown -R www-data:www-data /etc/nginx/iwaf/
+sudo chmod -R 755 /etc/nginx/iwaf/
 sudo nginx -t
+sudo systemctl reload nginx
+```
+
+**CentOS/RHEL:**
+```bash
+# 1. 安装Lua模块
+sudo yum install -y nginx-module-lua lua-cjson
+
+# 2. 启用模块和配置（用户组为nginx）
+sudo chown -R nginx:nginx /etc/nginx/iwaf/
+```
+
+### ⚡ 方案三：已安装OpenResty系统
+
+如果您已经在使用OpenResty，安装过程最为简单：
+
+```bash
+# 1. 检测OpenResty安装
+/usr/local/openresty/bin/openresty -V
+
+# 2. 克隆iWAF项目
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+
+# 3. 使用安装脚本（自动检测OpenResty）
+sudo ./setup.sh
+
+# 4. 或手动配置
+sudo mkdir -p /usr/local/openresty/nginx/iwaf/{lua/iwaf,web/{css,js,images},logs}
+sudo cp -r lua/* /usr/local/openresty/nginx/iwaf/lua/
+sudo cp conf/config.json /usr/local/openresty/nginx/iwaf/
+sudo cp conf/iwaf.conf /usr/local/openresty/nginx/conf.d/ || sudo mkdir -p /usr/local/openresty/nginx/conf.d && sudo cp conf/iwaf.conf /usr/local/openresty/nginx/conf.d/
+
+# 5. 在nginx.conf的http块中添加配置
+sudo cp /usr/local/openresty/nginx/conf/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+
+# 添加到http块
+sudo tee -a /tmp/iwaf-openresty.conf > /dev/null << 'EOF'
+    # iWAF Configuration  
+    lua_shared_dict iwaf_cache 10m;
+    lua_package_path "/usr/local/openresty/nginx/iwaf/lua/?.lua;/usr/local/openresty/nginx/iwaf/lua/iwaf/?.lua;;";
+    
+    init_by_lua_block {
+        local iwaf = require "waf"
+        iwaf.init()
+    }
+    
+    include conf.d/*.conf;
+EOF
+
+# 6. 设置权限
+sudo chown -R nobody:nobody /usr/local/openresty/nginx/iwaf/
+sudo chmod -R 755 /usr/local/openresty/nginx/iwaf/
+
+# 7. 测试并重启
+sudo /usr/local/openresty/bin/openresty -t
+sudo systemctl restart openresty || sudo /usr/local/openresty/bin/openresty -s reload
+```
+
+### 🌐 安装Dashboard管理界面（可选）
+
+Dashboard是独立运行在8080端口的管理界面：
+
+```bash
+# 确保已安装WAF核心功能后
+cd iwaf/dashboard
+
+# 一键安装Dashboard
+sudo ./setup-dashboard.sh
+
+# 手动安装Dashboard
+sudo mkdir -p /etc/nginx/iwaf/dashboard/{web,conf}
+sudo cp -r web/* /etc/nginx/iwaf/dashboard/web/
+sudo cp conf/dashboard.conf /etc/nginx/sites-available/iwaf-dashboard 2>/dev/null || sudo cp conf/dashboard.conf /etc/nginx/conf.d/iwaf-dashboard.conf
+
+# 启用站点（适用于Ubuntu/Debian的sites-enabled结构）
+sudo ln -s /etc/nginx/sites-available/iwaf-dashboard /etc/nginx/sites-enabled/ 2>/dev/null || echo "Using conf.d configuration"
+
+# 设置权限
+sudo chown -R www-data:www-data /etc/nginx/iwaf/dashboard/ || sudo chown -R nginx:nginx /etc/nginx/iwaf/dashboard/
+sudo chmod -R 755 /etc/nginx/iwaf/dashboard/
+
+# 配置防火墙（可选）
+sudo ufw allow 8080/tcp 2>/dev/null || sudo firewall-cmd --permanent --add-port=8080/tcp && sudo firewall-cmd --reload 2>/dev/null || echo "Please manually open port 8080"
+
+# 测试并重启Nginx
+sudo nginx -t
+sudo systemctl reload nginx
+
+# 访问Dashboard
+echo "Dashboard安装完成，访问地址: http://你的服务器IP:8080"
+```
+
+## ✅ 安装验证
+
+### 验证WAF核心功能
+
+安装完成后，请按以下步骤验证iWAF是否正常工作：
+
+#### 1. 检查服务状态
+
+```bash
+# 检查Nginx状态
+sudo systemctl status nginx
+
+# 检查Nginx配置
+sudo nginx -t
+
+# 检查iWAF文件是否存在
+ls -la /etc/nginx/iwaf/
+ls -la /etc/nginx/iwaf/lua/iwaf/
+ls -la /etc/nginx/conf.d/iwaf.conf
+```
+
+#### 2. 检查Lua模块加载
+
+```bash
+# 检查Nginx是否加载了Lua模块
+nginx -V 2>&1 | grep -o "with-http_lua_module\|lua"
+
+# 检查共享内存是否创建成功（在Nginx运行后）
+ps aux | grep nginx
+```
+
+#### 3. 功能测试
+
+```bash
+# 1. 正常访问测试
+curl -I http://localhost
+
+# 2. SQL注入测试（应该被阻止）
+curl "http://localhost/?id=1' OR '1'='1"
+
+# 3. XSS测试（应该被阻止）  
+curl "http://localhost/?name=<script>alert('xss')</script>"
+
+# 4. 路径遍历测试（应该被阻止）
+curl "http://localhost/../../../etc/passwd"
+
+# 5. 检查WAF日志
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/iwaf_access.log 2>/dev/null || echo "WAF access log not created yet"
+```
+
+#### 4. 配置验证
+
+```bash
+# 检查配置文件内容
+cat /etc/nginx/iwaf/config.json | head -20
+
+# 检查WAF是否启用
+grep -A 5 -B 5 "enabled" /etc/nginx/iwaf/config.json
+```
+
+### 验证Dashboard（如已安装）
+
+```bash
+# 1. 检查Dashboard文件
+ls -la /etc/nginx/iwaf/dashboard/web/
+
+# 2. 检查Dashboard配置
+nginx -T 2>/dev/null | grep -A 10 -B 10 "8080\|dashboard"
+
+# 3. 测试Dashboard访问
+curl -I http://localhost:8080
+
+# 4. 在浏览器中访问
+echo "请在浏览器中访问: http://$(curl -s ifconfig.me):8080"
+```
+
+## 🔧 故障排除
+
+### 常见问题及解决方案
+
+#### 问题1: Nginx启动失败 - "unknown directive lua_shared_dict"
+
+**原因**: Lua模块未正确加载
+
+**解决方案**:
+```bash
+# Ubuntu/Debian
+sudo apt-get install nginx-module-lua
+echo 'load_module modules/ngx_http_lua_module.so;' | sudo tee /etc/nginx/modules-enabled/50-mod-http-lua.conf
+
+# CentOS/RHEL
+sudo yum install nginx-module-lua
+echo 'load_module modules/ngx_http_lua_module.so;' | sudo tee /etc/nginx/conf.d/00-lua.conf
 
 # 重启Nginx
 sudo systemctl restart nginx
+```
+
+#### 问题2: "lua entry thread aborted" 错误
+
+**原因**: Lua脚本路径或依赖问题
+
+**解决方案**:
+```bash
+# 1. 检查lua-cjson是否安装
+lua -e "print(require('cjson').encode({test=true}))"
+
+# 2. 检查文件路径是否正确
+ls -la /etc/nginx/iwaf/lua/iwaf/waf.lua
+
+# 3. 检查文件权限
+sudo chown -R www-data:www-data /etc/nginx/iwaf/
+sudo chmod -R 755 /etc/nginx/iwaf/
+
+# 4. 检查Nginx配置中的路径
+grep -r "lua_package_path" /etc/nginx/
+```
+
+#### 问题3: WAF不工作，恶意请求未被阻止
+
+**排查步骤**:
+```bash
+# 1. 检查WAF是否启用
+grep "enabled" /etc/nginx/iwaf/config.json
+
+# 2. 检查server块是否包含WAF配置
+nginx -T | grep -A 10 -B 10 "access_by_lua_block"
+
+# 3. 启用调试模式
+sudo sed -i 's/"log_level": "info"/"log_level": "debug"/' /etc/nginx/iwaf/config.json
+sudo sed -i 's/"action": "block"/"action": "log"/' /etc/nginx/iwaf/config.json
+sudo systemctl reload nginx
+
+# 4. 测试并查看日志
+curl "http://localhost/?id=1' OR '1'='1"
+sudo tail -f /var/log/nginx/error.log
+```
+
+#### 问题4: Dashboard无法访问（404错误）
+
+**解决方案**:
+```bash
+# 1. 检查Dashboard文件是否存在
+ls -la /etc/nginx/iwaf/dashboard/web/
+
+# 2. 检查Nginx配置
+nginx -T | grep -A 20 "8080\|dashboard"
+
+# 3. 检查端口是否被占用
+sudo netstat -tlnp | grep 8080
+sudo ss -tlnp | grep 8080
+
+# 4. 重新安装Dashboard
+cd iwaf/dashboard
+sudo ./setup-dashboard.sh
+```
+
+#### 问题5: 权限错误
+
+**解决方案**:
+```bash
+# 标准Nginx安装
+sudo chown -R www-data:www-data /etc/nginx/iwaf/
+sudo chmod -R 755 /etc/nginx/iwaf/
+
+# CentOS/RHEL
+sudo chown -R nginx:nginx /etc/nginx/iwaf/
+sudo chmod -R 755 /etc/nginx/iwaf/
+
+# OpenResty
+sudo chown -R nobody:nobody /usr/local/openresty/nginx/iwaf/
+sudo chmod -R 755 /usr/local/openresty/nginx/iwaf/
+```
+
+#### 问题6: 内存或性能问题
+
+**优化方案**:
+```bash
+# 1. 增加共享内存
+sudo sed -i 's/lua_shared_dict iwaf_cache 10m;/lua_shared_dict iwaf_cache 50m;/' /etc/nginx/nginx.conf
+
+# 2. 优化worker进程
+sudo sed -i 's/worker_processes auto;/worker_processes auto;\nworker_connections 2048;/' /etc/nginx/nginx.conf
+
+# 3. 启用Lua代码缓存
+echo 'lua_code_cache on;' | sudo tee -a /etc/nginx/nginx.conf
+```
+
+### 调试模式
+
+启用详细调试信息：
+
+```bash
+# 1. 修改配置启用调试
+sudo tee /tmp/debug-config.json > /dev/null << 'EOF'
+{
+    "enabled": true,
+    "log_level": "debug", 
+    "action": "log",
+    "ip_whitelist": ["127.0.0.1", "::1"]
+}
+EOF
+
+# 2. 备份并替换配置
+sudo cp /etc/nginx/iwaf/config.json /etc/nginx/iwaf/config.json.backup
+sudo cp /tmp/debug-config.json /etc/nginx/iwaf/config.json
+
+# 3. 重新加载配置
+sudo systemctl reload nginx
+
+# 4. 实时查看日志
+sudo tail -f /var/log/nginx/error.log
+
+# 5. 在另一个终端进行测试
+curl "http://localhost/?test=<script>alert('xss')</script>"
+```
+
+### 完全卸载
+
+如需完全删除iWAF：
+
+```bash
+# 1. 停止Nginx
+sudo systemctl stop nginx
+
+# 2. 备份原始配置
+sudo cp /etc/nginx/nginx.conf.backup /etc/nginx/nginx.conf 2>/dev/null || echo "No backup found"
+
+# 3. 删除iWAF文件
+sudo rm -rf /etc/nginx/iwaf/
+sudo rm -f /etc/nginx/conf.d/iwaf*.conf
+sudo rm -f /etc/nginx/sites-enabled/iwaf-dashboard 2>/dev/null
+sudo rm -f /etc/nginx/sites-available/iwaf-dashboard 2>/dev/null
+
+# 4. 清理模块配置（如果使用了单独的模块配置文件）
+sudo rm -f /etc/nginx/modules-enabled/*lua* 2>/dev/null
+sudo rm -f /etc/nginx/conf.d/*lua* 2>/dev/null
+
+# 5. 清理日志轮转
+sudo rm -f /etc/logrotate.d/iwaf 2>/dev/null
+
+# 6. 重启Nginx
+sudo nginx -t
+sudo systemctl start nginx
+```
+
+## 📋 安装方式总结
+
+根据您的服务器环境选择合适的安装方式：
+
+| 环境类型 | 推荐方式 | 安装命令 | 特点 |
+|---------|---------|----------|------|
+| **纯净系统** | 一键安装 | `sudo ./setup.sh` | 全自动安装，适合新服务器 |
+| **已有Nginx** | 脚本安装 | `sudo ./setup.sh` | 自动检测现有配置 |
+| **已有OpenResty** | 脚本安装 | `sudo ./setup.sh` | 完美兼容，性能最佳 |
+| **生产环境** | 手动安装 | 详细步骤安装 | 可控性强，便于定制 |
+
+### 🎯 快速选择指南
+
+**1. 如果您是第一次部署：**
+```bash
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+sudo ./setup.sh
+```
+
+**2. 如果您已经有网站在运行：**
+```bash
+# 先备份现有配置
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+# 然后运行安装
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+sudo ./setup.sh
+```
+
+**3. 如果您使用OpenResty：**
+```bash
+# 直接安装，脚本会自动识别
+git clone https://github.com/git-xiaomy/iwaf.git  
+cd iwaf
+sudo ./setup.sh
+```
+
+**4. 如果您需要Dashboard管理界面：**
+```bash
+# 安装WAF后再安装Dashboard
+cd iwaf/dashboard
+sudo ./setup-dashboard.sh
+# 访问：http://你的IP:8080
 ```
 
 ## 🔧 配置说明
@@ -264,7 +729,114 @@ curl -X POST -H "Content-Type: application/json" \
 
 ## ❓ 常见问题
 
-查看 [FAQ 文档](docs/FAQ.md) 了解：
+### 安装相关
+
+**Q: 我的系统是CentOS 8，应该如何安装？**
+A: CentOS 8已停止维护，建议使用AlmaLinux或Rocky Linux。安装方法相同：
+```bash
+sudo dnf install epel-release
+sudo dnf install nginx nginx-module-lua lua-devel
+# 然后运行：sudo ./setup.sh
+```
+
+**Q: 为什么安装脚本提示找不到nginx-module-lua？**
+A: 某些系统可能没有此包，可以选择安装OpenResty：
+```bash
+# Ubuntu/Debian
+wget -qO - https://openresty.org/package/pubkey.gpg | sudo apt-key add -
+echo "deb http://openresty.org/package/ubuntu $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/openresty.list
+sudo apt-get update && sudo apt-get install -y openresty
+
+# CentOS/RHEL
+sudo yum install -y yum-utils
+sudo yum-config-manager --add-repo https://openresty.org/package/centos/openresty.repo
+sudo yum install -y openresty
+```
+
+**Q: lua-resty-redis 和 lua-resty-mysql 安装失败怎么办？**
+A: 这些是可选依赖，当前版本不需要。如果安装失败可以忽略，不影响WAF功能。
+
+**Q: 可以安装在Docker容器中吗？**
+A: 可以，但需要注意：
+```dockerfile
+FROM openresty/openresty:alpine
+COPY iwaf/ /etc/nginx/iwaf/
+# 配置文件需要适配容器环境
+```
+
+### 配置相关
+
+**Q: 如何修改Dashboard端口？**
+A: 编辑Dashboard配置文件：
+```bash
+sudo nano /etc/nginx/conf.d/iwaf-dashboard.conf
+# 修改：listen 8080; 为其他端口
+# 重启：sudo systemctl reload nginx
+```
+
+**Q: 如何添加IP白名单？**
+A: 编辑配置文件：
+```bash
+sudo nano /etc/nginx/iwaf/config.json
+# 在ip_whitelist数组中添加IP
+# 重启：sudo systemctl reload nginx
+```
+
+**Q: WAF误报太多，如何调整？**
+A: 建议先设置为监控模式：
+```bash
+# 修改配置文件中的action为"log"
+"action": "log"
+# 然后根据日志调整规则
+```
+
+**Q: 如何自定义阻挡页面？**
+A: 修改阻挡页面：
+```bash
+sudo nano /etc/nginx/iwaf/web/blocked.html
+# 自定义页面内容
+```
+
+### 性能相关
+
+**Q: WAF对网站性能影响大吗？**
+A: 影响很小，通常增加1-3ms延迟。可以通过以下方式优化：
+- 增加共享内存：`lua_shared_dict iwaf_cache 50m;`
+- 启用Lua缓存：`lua_code_cache on;`
+- 优化检测规则
+
+**Q: 高并发网站如何优化？**
+A: 
+```bash
+# 1. 增加worker进程
+worker_processes auto;
+worker_connections 2048;
+
+# 2. 增加共享内存
+lua_shared_dict iwaf_cache 100m;
+
+# 3. 系统优化
+echo 'net.core.somaxconn = 65535' >> /etc/sysctl.conf
+```
+
+### 功能相关
+
+**Q: 支持IPv6吗？**
+A: 支持。IPv6地址可以直接添加到白名单：
+```json
+"ip_whitelist": ["::1", "2001:db8::1"]
+```
+
+**Q: 支持集群部署吗？**
+A: 当前版本使用本地存储。集群部署建议：
+- 每个节点独立部署iWAF
+- 使用中心化日志收集
+- 配置文件保持同步
+
+**Q: 可以和其他WAF产品共存吗？**
+A: 可以，但建议只启用一个WAF避免重复检测影响性能。
+
+查看 [FAQ 文档](docs/FAQ.md) 了解更多：
 - 为什么需要安装 lua-redis 和 mysql 依赖？
 - 默认仪表盘的8080端口是如何创建的？
 - 其他安装和配置相关问题
@@ -310,20 +882,332 @@ iWAF使用JSON格式记录日志，便于分析和处理：
 
 ## 🚨 安全注意事项
 
-### 管理界面安全
-- 限制管理界面访问IP
-- 使用HTTPS访问
-- 定期更新密码
+### 生产环境部署建议
 
-### 配置文件安全
-- 设置适当的文件权限
-- 定期备份配置
-- 监控配置变更
+#### 1. 系统安全
 
-### 性能优化
-- 调整共享内存大小
-- 优化Lua代码性能
-- 监控系统资源使用
+```bash
+# 系统更新
+sudo apt-get update && sudo apt-get upgrade -y  # Ubuntu/Debian
+sudo yum update -y  # CentOS/RHEL
+
+# 配置防火墙
+sudo ufw enable  # Ubuntu/Debian
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp  
+sudo ufw allow 443/tcp
+sudo ufw allow 8080/tcp  # 如果使用Dashboard
+
+# CentOS/RHEL防火墙
+sudo firewall-cmd --permanent --add-service=ssh
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --permanent --add-port=8080/tcp  # Dashboard端口
+sudo firewall-cmd --reload
+```
+
+#### 2. Dashboard安全配置
+
+修改Dashboard配置以限制访问：
+
+```bash
+# 编辑Dashboard配置文件
+sudo nano /etc/nginx/conf.d/iwaf-dashboard.conf
+
+# 或者如果使用sites-available
+sudo nano /etc/nginx/sites-available/iwaf-dashboard
+```
+
+**安全配置示例**:
+```nginx
+server {
+    listen 8080;
+    server_name _;
+    
+    # 限制访问IP（重要！）
+    allow 192.168.1.0/24;    # 内网IP段
+    allow 10.0.0.0/24;       # 内网IP段
+    allow YOUR_IP_ADDRESS;   # 你的管理IP
+    deny all;
+    
+    # 基础认证（可选）
+    auth_basic "iWAF Dashboard";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    
+    root /etc/nginx/iwaf/dashboard/web;
+    index index.html;
+    
+    # 安全头
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
+    
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+```
+
+**创建Dashboard密码认证**:
+```bash
+# 安装htpasswd工具
+sudo apt-get install apache2-utils  # Ubuntu/Debian
+sudo yum install httpd-tools         # CentOS/RHEL
+
+# 创建密码文件
+sudo htpasswd -c /etc/nginx/.htpasswd admin
+
+# 重启Nginx应用配置
+sudo systemctl reload nginx
+```
+
+#### 3. HTTPS配置
+
+强烈建议为Dashboard配置HTTPS：
+
+```bash
+# 1. 获取SSL证书（Let's Encrypt示例）
+sudo apt-get install certbot python3-certbot-nginx  # Ubuntu/Debian
+sudo yum install certbot python3-certbot-nginx      # CentOS/RHEL
+
+# 2. 获取证书
+sudo certbot --nginx -d your-domain.com
+
+# 3. 或者使用自签名证书（测试环境）
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/iwaf.key \
+    -out /etc/ssl/certs/iwaf.crt
+
+# 4. 修改Dashboard配置支持HTTPS
+sudo tee /etc/nginx/conf.d/iwaf-dashboard-ssl.conf > /dev/null << 'EOF'
+server {
+    listen 8443 ssl http2;
+    server_name _;
+    
+    ssl_certificate /etc/ssl/certs/iwaf.crt;
+    ssl_certificate_key /etc/ssl/private/iwaf.key;
+    
+    # SSL安全配置
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    
+    # 其他配置...
+    root /etc/nginx/iwaf/dashboard/web;
+    index index.html;
+}
+
+# 重定向HTTP到HTTPS
+server {
+    listen 8080;
+    server_name _;
+    return 301 https://$server_name:8443$request_uri;
+}
+EOF
+
+# 开放HTTPS端口
+sudo ufw allow 8443/tcp  # Ubuntu/Debian
+sudo firewall-cmd --permanent --add-port=8443/tcp && sudo firewall-cmd --reload  # CentOS/RHEL
+```
+
+#### 4. 文件权限安全
+
+```bash
+# 设置安全的文件权限
+sudo chmod 600 /etc/nginx/iwaf/config.json
+sudo chmod 644 /etc/nginx/conf.d/iwaf*.conf
+sudo chmod -R 755 /etc/nginx/iwaf/lua/
+sudo chmod -R 644 /etc/nginx/iwaf/web/
+
+# 防止配置文件被Web访问
+sudo tee /etc/nginx/iwaf/web/.htaccess > /dev/null << 'EOF'
+<Files "*.json">
+    Order allow,deny
+    Deny from all
+</Files>
+EOF
+```
+
+#### 5. 日志安全
+
+```bash
+# 创建安全的日志目录
+sudo mkdir -p /var/log/iwaf
+sudo chown root:adm /var/log/iwaf
+sudo chmod 750 /var/log/iwaf
+
+# 配置日志轮转
+sudo tee /etc/logrotate.d/iwaf > /dev/null << 'EOF'
+/var/log/iwaf/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 640 root adm
+    postrotate
+        systemctl reload nginx
+    endscript
+}
+EOF
+```
+
+### 性能优化建议
+
+#### 1. Nginx配置优化
+
+```bash
+# 编辑主配置文件
+sudo nano /etc/nginx/nginx.conf
+
+# 推荐配置
+sudo tee -a /tmp/nginx-optimization.conf > /dev/null << 'EOF'
+# Worker进程优化
+worker_processes auto;
+worker_connections 2048;
+worker_rlimit_nofile 65535;
+
+# 事件模型优化
+events {
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    # 连接优化
+    keepalive_timeout 30;
+    keepalive_requests 1000;
+    client_max_body_size 10m;
+    
+    # 缓冲区优化
+    client_body_buffer_size 128k;
+    client_header_buffer_size 1k;
+    large_client_header_buffers 4 4k;
+    
+    # iWAF内存优化
+    lua_shared_dict iwaf_cache 50m;
+    lua_code_cache on;
+    
+    # 压缩优化
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
+}
+EOF
+```
+
+#### 2. 系统优化
+
+```bash
+# 系统内核参数优化
+sudo tee -a /etc/sysctl.conf > /dev/null << 'EOF'
+# 网络优化
+net.core.somaxconn = 65535
+net.core.netdev_max_backlog = 5000
+net.ipv4.tcp_max_syn_backlog = 65535
+net.ipv4.tcp_fin_timeout = 10
+net.ipv4.tcp_keepalive_time = 1200
+net.ipv4.tcp_max_tw_buckets = 5000
+
+# 文件描述符优化  
+fs.file-max = 2097152
+EOF
+
+# 应用内核参数
+sudo sysctl -p
+
+# 用户限制优化
+sudo tee -a /etc/security/limits.conf > /dev/null << 'EOF'
+* soft nofile 65535
+* hard nofile 65535
+nginx soft nofile 65535
+nginx hard nofile 65535
+www-data soft nofile 65535
+www-data hard nofile 65535
+EOF
+```
+
+### 监控和维护
+
+#### 1. 系统监控脚本
+
+```bash
+# 创建监控脚本
+sudo tee /usr/local/bin/iwaf-monitor.sh > /dev/null << 'EOF'
+#!/bin/bash
+
+# iWAF监控脚本
+LOG_FILE="/var/log/iwaf/monitor.log"
+DATE=$(date '+%Y-%m-%d %H:%M:%S')
+
+# 检查Nginx状态
+if ! systemctl is-active --quiet nginx; then
+    echo "[$DATE] ALERT: Nginx is not running!" >> $LOG_FILE
+    systemctl restart nginx
+fi
+
+# 检查WAF配置
+if ! nginx -t 2>/dev/null; then
+    echo "[$DATE] ALERT: Nginx configuration error!" >> $LOG_FILE
+fi
+
+# 检查内存使用
+MEMORY_USAGE=$(free | grep Mem | awk '{printf "%.2f", $3/$2 * 100.0}')
+if (( $(echo "$MEMORY_USAGE > 85" | bc -l) )); then
+    echo "[$DATE] WARNING: High memory usage: ${MEMORY_USAGE}%" >> $LOG_FILE
+fi
+
+# 检查日志文件大小
+LOG_SIZE=$(du -sm /var/log/nginx/ | cut -f1)
+if [ $LOG_SIZE -gt 1000 ]; then
+    echo "[$DATE] WARNING: Nginx logs size: ${LOG_SIZE}MB" >> $LOG_FILE
+fi
+
+echo "[$DATE] Monitor check completed" >> $LOG_FILE
+EOF
+
+# 设置执行权限
+sudo chmod +x /usr/local/bin/iwaf-monitor.sh
+
+# 添加到crontab（每5分钟检查一次）
+echo "*/5 * * * * root /usr/local/bin/iwaf-monitor.sh" | sudo tee -a /etc/crontab
+```
+
+#### 2. 备份脚本
+
+```bash
+# 创建备份脚本
+sudo tee /usr/local/bin/iwaf-backup.sh > /dev/null << 'EOF'
+#!/bin/bash
+
+BACKUP_DIR="/var/backups/iwaf"
+DATE=$(date '+%Y%m%d_%H%M%S')
+
+# 创建备份目录
+mkdir -p $BACKUP_DIR
+
+# 备份配置文件
+tar -czf "$BACKUP_DIR/iwaf-config-$DATE.tar.gz" \
+    /etc/nginx/iwaf/ \
+    /etc/nginx/nginx.conf \
+    /etc/nginx/conf.d/iwaf*.conf \
+    /etc/nginx/sites-available/iwaf* 2>/dev/null
+
+# 清理旧备份（保留7天）
+find $BACKUP_DIR -name "iwaf-config-*.tar.gz" -mtime +7 -delete
+
+echo "Backup completed: iwaf-config-$DATE.tar.gz"
+EOF
+
+sudo chmod +x /usr/local/bin/iwaf-backup.sh
+
+# 每日备份
+echo "0 2 * * * root /usr/local/bin/iwaf-backup.sh" | sudo tee -a /etc/crontab
+```
 
 ## 🛠️ 高级配置
 
