@@ -51,6 +51,8 @@ iWAF 是一个基于 Nginx + Lua 开发的高性能Web应用防火墙，提供�
 
 根据您的系统环境，选择对应的安装方式：
 
+> **💡 宝塔面板用户特别说明**: 如果您使用宝塔面板管理服务器，请直接跳转到 [方案四：宝塔面板安装的Nginx系统](#-方案四宝塔面板安装的nginx系统) 查看专门的安装方法。宝塔面板使用特殊的目录结构（`/www/server/nginx/`），需要按照特定步骤进行配置。
+
 ### 🔧 方案一：纯净系统安装（未安装Nginx）
 
 适用于全新的服务器环境，将自动安装所需的所有依赖。
@@ -265,6 +267,196 @@ sudo /usr/local/openresty/bin/openresty -t
 sudo systemctl restart openresty || sudo /usr/local/openresty/bin/openresty -s reload
 ```
 
+### 🐮 方案四：宝塔面板安装的Nginx系统
+
+适用于使用宝塔面板管理的服务器环境。宝塔面板通常将Nginx安装在特定目录结构中。
+
+#### 检测宝塔面板Nginx安装
+
+```bash
+# 检查宝塔面板是否已安装
+ls -la /www/server/nginx/
+
+# 检查Nginx版本和模块支持
+/www/server/nginx/sbin/nginx -V
+
+# 检查是否支持Lua模块
+/www/server/nginx/sbin/nginx -V 2>&1 | grep -o with-http_lua_module
+```
+
+#### 安装步骤
+
+**方法一：使用宝塔面板软件商店（推荐）**
+
+如果您的宝塔面板版本较新，可能支持直接安装OpenResty：
+
+```bash
+# 1. 在宝塔面板 > 软件商店 > 搜索 "OpenResty" 并安装
+# 2. 或者在命令行安装OpenResty替代标准Nginx
+
+# 备份现有配置
+sudo cp -r /www/server/nginx/ /www/server/nginx.backup.$(date +%Y%m%d_%H%M%S)
+
+# 停止当前Nginx
+sudo /etc/init.d/nginx stop
+
+# 安装OpenResty
+wget https://openresty.org/package/centos/openresty.repo -O /etc/yum.repos.d/openresty.repo
+sudo yum install -y openresty
+
+# 迁移配置文件
+sudo cp -r /www/server/nginx/conf/* /usr/local/openresty/nginx/conf/
+```
+
+**方法二：为宝塔Nginx编译Lua模块（高级用户）**
+
+```bash
+# 1. 检查当前Nginx编译参数
+/www/server/nginx/sbin/nginx -V > /tmp/nginx-compile-args.txt
+
+# 2. 下载Nginx源码和lua模块
+cd /tmp
+wget http://nginx.org/download/nginx-1.18.0.tar.gz  # 替换为实际版本
+wget https://github.com/openresty/lua-nginx-module/archive/v0.10.19.tar.gz
+wget https://github.com/openresty/lua-resty-core/archive/v0.1.21.tar.gz
+
+# 3. 编译带Lua模块的Nginx（需要专业知识）
+# 注意：此方法复杂且可能影响宝塔面板功能，不建议普通用户使用
+```
+
+**方法三：手动配置iWAF适配宝塔环境（推荐）**
+
+```bash
+# 1. 克隆iWAF项目
+cd /www/wwwroot  # 宝塔默认网站目录
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+
+# 2. 创建iWAF目录结构（适配宝塔路径）
+sudo mkdir -p /www/server/nginx/iwaf/{lua/iwaf,web/{css,js,images},logs}
+
+# 3. 复制文件
+sudo cp -r lua/* /www/server/nginx/iwaf/lua/
+sudo cp conf/config.json /www/server/nginx/iwaf/
+
+# 4. 创建适配宝塔的配置文件
+sudo tee /www/server/nginx/conf/iwaf.conf > /dev/null << 'EOF'
+# iWAF Configuration for Baota Panel
+# 在每个server块中引入此配置
+
+# 启用请求体读取
+lua_need_request_body on;
+
+# 设置最大请求体大小
+client_max_body_size 10m;
+
+# iWAF访问阶段检查
+access_by_lua_block {
+    local iwaf = require "waf"
+    iwaf.check_request()
+}
+
+# 自定义错误页面（可选）
+error_page 403 /iwaf_blocked.html;
+location = /iwaf_blocked.html {
+    root /www/server/nginx/iwaf/web;
+    internal;
+}
+EOF
+
+# 5. 修改宝塔主配置文件
+sudo cp /www/server/nginx/conf/nginx.conf /www/server/nginx/conf/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)
+
+# 在http块中添加iWAF配置
+sudo sed -i '/http {/a\
+    # iWAF Configuration\
+    lua_shared_dict iwaf_cache 10m;\
+    lua_package_path "/www/server/nginx/iwaf/lua/?.lua;/www/server/nginx/iwaf/lua/iwaf/?.lua;;";\
+    \
+    init_by_lua_block {\
+        local iwaf = require "waf"\
+        iwaf.init()\
+    }\
+    \
+    # 包含iWAF配置\
+    include iwaf.conf;' /www/server/nginx/conf/nginx.conf
+
+# 6. 设置权限（宝塔使用www用户）
+sudo chown -R www:www /www/server/nginx/iwaf/
+sudo chmod -R 755 /www/server/nginx/iwaf/
+sudo chmod 644 /www/server/nginx/iwaf/config.json
+
+# 7. 测试配置并重启
+sudo /www/server/nginx/sbin/nginx -t
+sudo /etc/init.d/nginx restart
+
+# 8. 验证安装
+curl -I http://localhost
+```
+
+#### 宝塔面板特殊配置
+
+**在宝塔面板中为特定网站启用iWAF：**
+
+1. 登录宝塔面板
+2. 进入 "网站" > 选择要保护的网站 > "配置文件"
+3. 在server块中添加以下配置：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    # 引入iWAF配置
+    include /www/server/nginx/conf/iwaf.conf;
+    
+    # 其他网站配置...
+    root /www/wwwroot/your-site;
+    index index.html index.php;
+    
+    # PHP处理等其他配置...
+}
+```
+
+**宝塔面板环境变量设置：**
+
+由于宝塔面板可能使用不同的用户和路径，需要确保环境配置正确：
+
+```bash
+# 检查宝塔Nginx用户
+ps aux | grep nginx | head -1
+
+# 如果是www用户，调整权限
+sudo chown -R www:www /www/server/nginx/iwaf/
+
+# 如果是nginx用户，调整权限  
+sudo chown -R nginx:nginx /www/server/nginx/iwaf/
+```
+
+#### 宝塔面板注意事项
+
+⚠️ **重要提醒**：
+
+1. **备份配置**：修改宝塔Nginx配置前，务必先备份
+2. **面板兼容性**：某些操作可能会在宝塔面板中显示警告，这是正常现象
+3. **更新影响**：宝塔面板更新时可能会重置Nginx配置，需要重新应用iWAF配置
+4. **日志路径**：宝塔的Nginx日志通常在`/www/wwwlogs/`目录下
+
+**宝塔面板环境测试：**
+
+```bash
+# 1. 功能测试
+curl "http://your-domain.com/?id=1' OR '1'='1"  # 应该被阻止
+
+# 2. 查看宝塔日志
+sudo tail -f /www/wwwlogs/access.log
+sudo tail -f /www/wwwlogs/nginx_error.log
+
+# 3. 检查iWAF工作状态
+ps aux | grep nginx
+/www/server/nginx/sbin/nginx -t
+```
+
 ### 🌐 安装Dashboard管理界面（可选）
 
 Dashboard是独立运行在8080端口的管理界面：
@@ -472,9 +664,54 @@ sudo chmod -R 755 /etc/nginx/iwaf/
 # OpenResty
 sudo chown -R nobody:nobody /usr/local/openresty/nginx/iwaf/
 sudo chmod -R 755 /usr/local/openresty/nginx/iwaf/
+
+# 宝塔面板
+sudo chown -R www:www /www/server/nginx/iwaf/
+sudo chmod -R 755 /www/server/nginx/iwaf/
 ```
 
-#### 问题6: 内存或性能问题
+#### 问题6: 宝塔面板特有问题
+
+**问题**: 宝塔面板更新后iWAF配置丢失
+
+**解决方案**:
+```bash
+# 1. 重新应用iWAF配置
+sudo cp /www/server/nginx/conf/nginx.conf.backup.* /www/server/nginx/conf/nginx.conf
+
+# 2. 或者重新添加配置
+sudo sed -i '/http {/a\
+    # iWAF Configuration\
+    lua_shared_dict iwaf_cache 10m;\
+    lua_package_path "/www/server/nginx/iwaf/lua/?.lua;/www/server/nginx/iwaf/lua/iwaf/?.lua;;";\
+    \
+    init_by_lua_block {\
+        local iwaf = require "waf"\
+        iwaf.init()\
+    }\
+    \
+    # 包含iWAF配置\
+    include iwaf.conf;' /www/server/nginx/conf/nginx.conf
+
+# 3. 重启Nginx
+sudo /etc/init.d/nginx restart
+```
+
+**问题**: 宝塔面板中显示Nginx配置错误
+
+**解决方案**:
+```bash
+# 1. 检查配置语法
+sudo /www/server/nginx/sbin/nginx -t
+
+# 2. 检查Lua模块是否已加载
+sudo /www/server/nginx/sbin/nginx -V 2>&1 | grep lua
+
+# 3. 如果Lua模块不支持，可以尝试安装OpenResty
+# 在宝塔面板 > 软件商店 > 搜索并安装 "OpenResty"
+```
+
+#### 问题7: 内存或性能问题
 
 **优化方案**:
 ```bash
@@ -486,6 +723,11 @@ sudo sed -i 's/worker_processes auto;/worker_processes auto;\nworker_connections
 
 # 3. 启用Lua代码缓存
 echo 'lua_code_cache on;' | sudo tee -a /etc/nginx/nginx.conf
+
+# 宝塔面板环境优化
+# 宝塔面板配置文件位置：/www/server/nginx/conf/nginx.conf
+sudo sed -i 's/lua_shared_dict iwaf_cache 10m;/lua_shared_dict iwaf_cache 50m;/' /www/server/nginx/conf/nginx.conf
+```
 ```
 
 ### 调试模式
@@ -555,6 +797,7 @@ sudo systemctl start nginx
 | **纯净系统** | 一键安装 | `sudo ./setup.sh` | 全自动安装，适合新服务器 |
 | **已有Nginx** | 脚本安装 | `sudo ./setup.sh` | 自动检测现有配置 |
 | **已有OpenResty** | 脚本安装 | `sudo ./setup.sh` | 完美兼容，性能最佳 |
+| **宝塔面板环境** | 手动安装 | 详细步骤安装 | 适配宝塔路径，保持面板兼容 |
 | **生产环境** | 手动安装 | 详细步骤安装 | 可控性强，便于定制 |
 
 ### 🎯 快速选择指南
@@ -584,7 +827,16 @@ cd iwaf
 sudo ./setup.sh
 ```
 
-**4. 如果您需要Dashboard管理界面：**
+**4. 如果您使用宝塔面板：**
+```bash
+# 克隆到宝塔网站目录
+cd /www/wwwroot
+git clone https://github.com/git-xiaomy/iwaf.git
+cd iwaf
+# 按照方案四手动配置步骤进行安装
+```
+
+**5. 如果您需要Dashboard管理界面：**
 ```bash
 # 安装WAF后再安装Dashboard
 cd iwaf/dashboard
