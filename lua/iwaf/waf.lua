@@ -12,8 +12,11 @@ _M._VERSION = '1.0.0'
 
 -- Import required modules
 local cjson = require "cjson"
-local redis = require "resty.redis"
-local mysql = require "resty.mysql"
+
+-- 以下模块在当前版本中暂未使用，为未来功能扩展预留
+-- These modules are reserved for future enhancements and not used in current version
+local redis = require "resty.redis"  -- 计划用于分布式缓存和会话管理 (For distributed caching and session management)
+local mysql = require "resty.mysql"  -- 计划用于日志存储和配置持久化 (For log storage and config persistence)
 
 -- Configuration file path
 local config_file = "/etc/nginx/iwaf/config.json"

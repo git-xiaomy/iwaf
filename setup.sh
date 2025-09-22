@@ -66,8 +66,12 @@ install_packages() {
         $PKG_MANAGER update
         $PKG_MANAGER install -y nginx nginx-module-lua lua-cjson
         
-        # Try to install additional Lua libraries
-        $PKG_MANAGER install -y lua-resty-redis lua-resty-mysql || true
+        # 尝试安装额外的 Lua 库 (可选，当前版本未使用)
+        # Try to install additional Lua libraries (optional, not used in current version)
+        print_status "Installing optional Lua libraries (for future features)..."
+        $PKG_MANAGER install -y lua-resty-redis lua-resty-mysql || {
+            print_warning "Optional libraries installation failed, but this won't affect WAF functionality"
+        }
         
     elif [ "$OS" = "redhat" ]; then
         $PKG_MANAGER install -y epel-release

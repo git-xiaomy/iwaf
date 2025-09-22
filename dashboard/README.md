@@ -6,6 +6,9 @@
 
 这个dashboard提供了一个完全独立的Web管理界面，运行在端口8080上，不会占用主站点的URL路径。用户可以手动创建dashboard站点，实现前后端完全分离。
 
+> **端口8080的创建方式**: Dashboard通过 Nginx 配置文件 (`conf/dashboard.conf`) 创建8080端口监听，
+> 安装脚本会自动复制配置到 `/etc/nginx/sites-available/` 并启用。详见 [FAQ](../docs/FAQ.md#2-默认仪表盘的8080端口是通过什么方式创建的)。
+
 ## 特性
 
 - **独立端口**: 运行在8080端口，不影响主站点
