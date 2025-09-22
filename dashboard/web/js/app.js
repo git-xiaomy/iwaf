@@ -1,6 +1,28 @@
 // API configuration
 const API_BASE_URL = '/api';  // Since dashboard runs on separate port, API is relative
 
+// Helper function for making API calls
+async function makeAPICall(endpoint, method = 'GET', data = null) {
+    try {
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+        
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+}
+
 // Global variables
 let wafConfig = {
     enabled: true,
@@ -37,10 +59,10 @@ const tabContents = document.querySelectorAll('.tab-content');
 const navItems = document.querySelectorAll('.nav-item');
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     initializeTabs();
     updateDashboard();
-    loadConfiguration();
+    await loadConfiguration(); // Wait for configuration to load
     updateLogs();
     startRealTimeUpdates();
 });
@@ -138,7 +160,22 @@ function updateRequestChart() {
 }
 
 // Load and apply configuration
-function loadConfiguration() {
+async function loadConfiguration() {
+    try {
+        const response = await fetch('/api/config');
+        const result = await response.json();
+        
+        if (result.status === 'success' && result.config) {
+            // Update local config from server
+            wafConfig = result.config;
+        } else {
+            console.warn('Failed to load configuration from server, using defaults');
+        }
+    } catch (error) {
+        console.error('Error loading configuration:', error);
+        showNotification('加载配置失败，使用默认配置', 'warning');
+    }
+    
     // Security toggles
     document.getElementById('sql-protection').checked = wafConfig.sql_injection.enabled;
     document.getElementById('xss-protection').checked = wafConfig.xss_protection.enabled;
@@ -149,6 +186,14 @@ function loadConfiguration() {
     document.getElementById('rate-limit-enabled').checked = wafConfig.rate_limit.enabled;
     document.getElementById('requests-per-minute').value = wafConfig.rate_limit.requests_per_minute;
     document.getElementById('burst-size').value = wafConfig.rate_limit.burst;
+    
+    // System settings
+    if (document.getElementById('log-level')) {
+        document.getElementById('log-level').value = wafConfig.log_level || 'info';
+    }
+    if (document.getElementById('action-mode')) {
+        document.getElementById('action-mode').value = wafConfig.action || 'block';
+    }
     
     // Load IP lists
     updateIPLists();
@@ -190,16 +235,33 @@ function createIPTag(ip, type) {
 }
 
 // Add IP to whitelist
-function addWhitelistIP() {
+async function addWhitelistIP() {
     const input = document.getElementById('whitelist-ip');
     const ip = input.value.trim();
     
     if (ip && isValidIP(ip)) {
         if (!wafConfig.ip_whitelist.includes(ip)) {
-            wafConfig.ip_whitelist.push(ip);
-            updateIPLists();
-            input.value = '';
-            showNotification('IP已添加到白名单', 'success');
+            try {
+                wafConfig.ip_whitelist.push(ip);
+                
+                // Send to API
+                const result = await makeAPICall('/config', 'POST', wafConfig);
+                
+                if (result.status === 'success') {
+                    updateIPLists();
+                    input.value = '';
+                    showNotification('IP已添加到白名单', 'success');
+                } else {
+                    // Rollback on failure
+                    wafConfig.ip_whitelist.pop();
+                    showNotification('添加IP失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                // Rollback on failure
+                wafConfig.ip_whitelist.pop();
+                console.error('Error adding IP to whitelist:', error);
+                showNotification('添加IP失败，请检查网络连接', 'error');
+            }
         } else {
             showNotification('IP已存在于白名单中', 'warning');
         }
@@ -209,16 +271,33 @@ function addWhitelistIP() {
 }
 
 // Add IP to blacklist
-function addBlacklistIP() {
+async function addBlacklistIP() {
     const input = document.getElementById('blacklist-ip');
     const ip = input.value.trim();
     
     if (ip && isValidIP(ip)) {
         if (!wafConfig.ip_blacklist.includes(ip)) {
-            wafConfig.ip_blacklist.push(ip);
-            updateIPLists();
-            input.value = '';
-            showNotification('IP已添加到黑名单', 'success');
+            try {
+                wafConfig.ip_blacklist.push(ip);
+                
+                // Send to API
+                const result = await makeAPICall('/config', 'POST', wafConfig);
+                
+                if (result.status === 'success') {
+                    updateIPLists();
+                    input.value = '';
+                    showNotification('IP已添加到黑名单', 'success');
+                } else {
+                    // Rollback on failure
+                    wafConfig.ip_blacklist.pop();
+                    showNotification('添加IP失败: ' + result.message, 'error');
+                }
+            } catch (error) {
+                // Rollback on failure
+                wafConfig.ip_blacklist.pop();
+                console.error('Error adding IP to blacklist:', error);
+                showNotification('添加IP失败，请检查网络连接', 'error');
+            }
         } else {
             showNotification('IP已存在于黑名单中', 'warning');
         }
@@ -228,15 +307,40 @@ function addBlacklistIP() {
 }
 
 // Remove IP from list
-function removeIP(ip, type) {
-    if (type === 'whitelist') {
-        wafConfig.ip_whitelist = wafConfig.ip_whitelist.filter(item => item !== ip);
-    } else {
-        wafConfig.ip_blacklist = wafConfig.ip_blacklist.filter(item => item !== ip);
+async function removeIP(ip, type) {
+    try {
+        // Update local config
+        if (type === 'whitelist') {
+            wafConfig.ip_whitelist = wafConfig.ip_whitelist.filter(item => item !== ip);
+        } else {
+            wafConfig.ip_blacklist = wafConfig.ip_blacklist.filter(item => item !== ip);
+        }
+        
+        // Send to API
+        const result = await makeAPICall('/config', 'POST', wafConfig);
+        
+        if (result.status === 'success') {
+            updateIPLists();
+            showNotification(`IP已从${type === 'whitelist' ? '白' : '黑'}名单中移除`, 'info');
+        } else {
+            // Rollback on failure
+            if (type === 'whitelist') {
+                wafConfig.ip_whitelist.push(ip);
+            } else {
+                wafConfig.ip_blacklist.push(ip);
+            }
+            showNotification('移除IP失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        // Rollback on failure
+        if (type === 'whitelist') {
+            wafConfig.ip_whitelist.push(ip);
+        } else {
+            wafConfig.ip_blacklist.push(ip);
+        }
+        console.error('Error removing IP:', error);
+        showNotification('移除IP失败，请检查网络连接', 'error');
     }
-    
-    updateIPLists();
-    showNotification(`IP已从${type === 'whitelist' ? '白' : '黑'}名单中移除`, 'info');
 }
 
 // Validate IP address
@@ -247,15 +351,27 @@ function isValidIP(ip) {
 }
 
 // Save security configuration
-function saveSecurityConfig() {
-    wafConfig.sql_injection.enabled = document.getElementById('sql-protection').checked;
-    wafConfig.xss_protection.enabled = document.getElementById('xss-protection').checked;
-    wafConfig.path_traversal.enabled = document.getElementById('path-traversal').checked;
-    wafConfig.user_agent.enabled = document.getElementById('user-agent-filter').checked;
-    
-    // In a real implementation, this would send data to the server
-    showNotification('安全配置已保存', 'success');
-    console.log('Security config saved:', wafConfig);
+async function saveSecurityConfig() {
+    try {
+        // Update local config
+        wafConfig.sql_injection.enabled = document.getElementById('sql-protection').checked;
+        wafConfig.xss_protection.enabled = document.getElementById('xss-protection').checked;
+        wafConfig.path_traversal.enabled = document.getElementById('path-traversal').checked;
+        wafConfig.user_agent.enabled = document.getElementById('user-agent-filter').checked;
+        
+        // Send to API
+        const result = await makeAPICall('/config', 'POST', wafConfig);
+        
+        if (result.status === 'success') {
+            showNotification('安全配置已保存', 'success');
+            console.log('Security config saved:', wafConfig);
+        } else {
+            showNotification('保存配置失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error saving security config:', error);
+        showNotification('保存配置失败，请检查网络连接', 'error');
+    }
 }
 
 // Reset security configuration
@@ -269,37 +385,74 @@ function resetSecurityConfig() {
 }
 
 // Save rate limit configuration
-function saveRateLimitConfig() {
-    wafConfig.rate_limit.enabled = document.getElementById('rate-limit-enabled').checked;
-    wafConfig.rate_limit.requests_per_minute = parseInt(document.getElementById('requests-per-minute').value);
-    wafConfig.rate_limit.burst = parseInt(document.getElementById('burst-size').value);
-    
-    showNotification('速率限制配置已保存', 'success');
-    console.log('Rate limit config saved:', wafConfig.rate_limit);
+async function saveRateLimitConfig() {
+    try {
+        // Update local config
+        wafConfig.rate_limit.enabled = document.getElementById('rate-limit-enabled').checked;
+        wafConfig.rate_limit.requests_per_minute = parseInt(document.getElementById('requests-per-minute').value);
+        wafConfig.rate_limit.burst = parseInt(document.getElementById('burst-size').value);
+        
+        // Send to API
+        const result = await makeAPICall('/config', 'POST', wafConfig);
+        
+        if (result.status === 'success') {
+            showNotification('速率限制配置已保存', 'success');
+            console.log('Rate limit config saved:', wafConfig.rate_limit);
+        } else {
+            showNotification('保存配置失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error saving rate limit config:', error);
+        showNotification('保存配置失败，请检查网络连接', 'error');
+    }
 }
 
 // Save system configuration
-function saveSystemConfig() {
-    const logLevel = document.getElementById('log-level').value;
-    const actionMode = document.getElementById('action-mode').value;
-    
-    // Update configuration
-    wafConfig.log_level = logLevel;
-    wafConfig.action = actionMode;
-    
-    showNotification('系统配置已保存', 'success');
-    console.log('System config saved:', { log_level: logLevel, action: actionMode });
+async function saveSystemConfig() {
+    try {
+        const logLevel = document.getElementById('log-level').value;
+        const actionMode = document.getElementById('action-mode').value;
+        
+        // Update local configuration
+        wafConfig.log_level = logLevel;
+        wafConfig.action = actionMode;
+        
+        // Send to API
+        const result = await makeAPICall('/config', 'POST', wafConfig);
+        
+        if (result.status === 'success') {
+            showNotification('系统配置已保存', 'success');
+            console.log('System config saved:', { log_level: logLevel, action: actionMode });
+        } else {
+            showNotification('保存配置失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error saving system config:', error);
+        showNotification('保存配置失败，请检查网络连接', 'error');
+    }
 }
 
 // Restart WAF
-function restartWAF() {
+async function restartWAF() {
     if (confirm('确定要重启WAF吗？这将短暂中断防护功能。')) {
-        showNotification('正在重启WAF...', 'info');
-        
-        // Simulate restart delay
-        setTimeout(() => {
-            showNotification('WAF重启成功', 'success');
-        }, 2000);
+        try {
+            showNotification('正在重启WAF...', 'info');
+            
+            const result = await makeAPICall('/restart', 'POST');
+            
+            if (result.status === 'success') {
+                showNotification('WAF重启成功', 'success');
+                // Reload configuration after restart
+                setTimeout(() => {
+                    loadConfiguration();
+                }, 2000);
+            } else {
+                showNotification('WAF重启失败: ' + result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error restarting WAF:', error);
+            showNotification('WAF重启失败，请检查网络连接', 'error');
+        }
     }
 }
 
