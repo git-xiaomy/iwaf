@@ -454,6 +454,11 @@ function _M.get_stats()
     return cjson.encode(stats)
 end
 
+-- 获取当前配置
+function _M.get_config()
+    return cjson.encode(config)
+end
+
 -- 更新配置
 function _M.update_config(new_config)
     config = new_config
