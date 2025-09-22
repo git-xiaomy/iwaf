@@ -128,11 +128,16 @@ local function log_event(level, message, details)
         timestamp = ngx.now(),
         level = level,
         message = message,
-        details = details or {},
-        client_ip = ngx.var.remote_addr,
-        request_uri = ngx.var.request_uri,
-        user_agent = ngx.var.http_user_agent
+        details = details or {}
     }
+    
+    -- 只在请求上下文中添加请求相关信息
+    -- Only add request-related information in request context
+    if ngx.get_phase() ~= "init" and ngx.get_phase() ~= "init_worker" then
+        log_data.client_ip = ngx.var.remote_addr
+        log_data.request_uri = ngx.var.request_uri
+        log_data.user_agent = ngx.var.http_user_agent
+    end
     
     if level == "error" or level == "warn" then
         ngx.log(ngx.ERR, cjson.encode(log_data))
@@ -187,6 +192,13 @@ end
 -- 速率限制检查
 local function check_rate_limit(client_ip)
     if not config.rate_limit.enabled then
+        return "pass"
+    end
+    
+    -- 检查共享字典是否可用
+    -- Check if shared dictionary is available
+    if not ngx.shared.iwaf_cache then
+        log_event("error", "Shared dictionary 'iwaf_cache' not available, skipping rate limit check")
         return "pass"
     end
     
@@ -392,9 +404,11 @@ end
 
 -- 初始化函数
 function _M.init()
-    -- 创建共享内存字典用于缓存
+    -- 检查共享内存字典是否可用
+    -- Check if shared dictionary is available
     if not ngx.shared.iwaf_cache then
-        log_event("error", "Shared dictionary 'iwaf_cache' not found")
+        log_event("error", "Shared dictionary 'iwaf_cache' not found. Please ensure 'lua_shared_dict iwaf_cache 10m;' is configured in nginx.conf")
+        log_event("warn", "iWAF will work with limited functionality without shared dictionary")
     end
     
     -- 加载配置
@@ -409,9 +423,16 @@ function _M.get_stats()
         version = _M._VERSION,
         enabled = config.enabled,
         uptime = ngx.now(),
-        requests_checked = ngx.shared.iwaf_cache:get("requests_checked") or 0,
-        requests_blocked = ngx.shared.iwaf_cache:get("requests_blocked") or 0
+        requests_checked = 0,
+        requests_blocked = 0
     }
+    
+    -- 只有在共享字典可用时才获取统计信息
+    -- Only get statistics when shared dictionary is available
+    if ngx.shared.iwaf_cache then
+        stats.requests_checked = ngx.shared.iwaf_cache:get("requests_checked") or 0
+        stats.requests_blocked = ngx.shared.iwaf_cache:get("requests_blocked") or 0
+    end
     
     return cjson.encode(stats)
 end
