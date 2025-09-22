@@ -459,6 +459,20 @@ ps aux | grep nginx
 
 ### 🌐 安装Dashboard管理界面（可选）
 
+如果需要Web管理界面，可以安装Dashboard：
+
+```bash
+cd iwaf/dashboard
+sudo ./setup-dashboard.sh
+```
+
+### 📚 更多文档
+
+- **[完整故障排除指南](docs/TROUBLESHOOTING.md)** - 解决常见问题和错误
+- **[宝塔面板配置示例](examples/baota-config.md)** - 专门针对宝塔用户的配置指导
+- **[安装文档](docs/INSTALLATION.md)** - 详细的安装说明
+- **[配置说明](docs/CONFIGURATION.md)** - WAF规则配置指南
+
 Dashboard是独立运行在8080端口的管理界面：
 
 ```bash
