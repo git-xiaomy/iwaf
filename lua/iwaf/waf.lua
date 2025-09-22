@@ -1,14 +1,14 @@
 --[[
     iWAF - Intelligent Web Application Firewall for Nginx
     Author: iwaf project
-    Version: 1.0.0
+    Version: 1.0.1
     Description: A comprehensive WAF module with security features including
                 IP filtering, SQL injection protection, XSS protection,
                 rate limiting, and web management interface.
 --]]
 
 local _M = {}
-_M._VERSION = '1.0.0'
+_M._VERSION = '1.0.1'
 
 -- Import required modules
 local cjson = require "cjson"
@@ -123,6 +123,7 @@ local default_config = {
 local config = default_config
 
 -- 日志函数
+-- Fixed: Use pcall to prevent "no request found" errors during initialization
 local function log_event(level, message, details)
     local log_data = {
         timestamp = ngx.now(),
@@ -133,10 +134,26 @@ local function log_event(level, message, details)
     
     -- 只在请求上下文中添加请求相关信息
     -- Only add request-related information in request context
-    if ngx.get_phase() ~= "init" and ngx.get_phase() ~= "init_worker" then
-        log_data.client_ip = ngx.var.remote_addr
-        log_data.request_uri = ngx.var.request_uri
-        log_data.user_agent = ngx.var.http_user_agent
+    -- Use pcall to safely check phase and access request variables
+    local phase = ngx.get_phase()
+    local is_request_phase = phase ~= "init" and phase ~= "init_worker"
+    
+    if is_request_phase then
+        -- Use pcall to safely access request variables
+        local ok, client_ip = pcall(function() return ngx.var.remote_addr end)
+        if ok and client_ip then
+            log_data.client_ip = client_ip
+        end
+        
+        local ok, request_uri = pcall(function() return ngx.var.request_uri end)
+        if ok and request_uri then
+            log_data.request_uri = request_uri
+        end
+        
+        local ok, user_agent = pcall(function() return ngx.var.http_user_agent end)
+        if ok and user_agent then
+            log_data.user_agent = user_agent
+        end
     end
     
     if level == "error" or level == "warn" then
